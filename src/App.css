@@ -1,38 +1,188 @@
-.App {
-  text-align: center;
-}
-
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
+.app-shell {
   min-height: 100vh;
+  background: linear-gradient(135deg, #f2f6ff, #effcf5);
+  color: #1f2937;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background: #0f172a;
+  color: #ffffff;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.topbar button {
+  border: 1px solid #334155;
+  background: transparent;
+  color: #f8fafc;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.topbar button.active,
+.topbar button:hover {
+  background: #22c55e;
+  border-color: #22c55e;
+  color: #052e16;
+}
+
+.content {
+  max-width: 760px;
+  margin: 2rem auto;
+  padding: 0 1rem 2rem;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+  padding: 1.5rem;
+}
+
+.card h2 {
+  margin-top: 0;
+}
+
+.task-form {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.task-form input,
+.auth-form input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  box-sizing: border-box;
+}
+
+.task-form button,
+.auth-form button,
+.delete-btn,
+.auth-required button,
+.secondary-btn {
+  border: none;
+  background: #0ea5e9;
+  color: #ffffff;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.secondary-btn {
+  background: #334155;
+}
+
+.task-summary {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
+  gap: 0.6rem;
+}
+
+.task-list li {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  gap: 1rem;
+  padding: 0.7rem;
+  background: #f8fafc;
+  border-radius: 8px;
 }
 
-.App-link {
-  color: #61dafb;
+.task-list li.done label {
+  text-decoration: line-through;
+  color: #64748b;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
+.task-list label {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.delete-btn {
+  background: #ef4444;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.auth-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+
+.auth-required {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 10px;
+}
+
+.user-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.error-text {
+  margin: 0;
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.info-text {
+  margin: 0.75rem 0;
+  color: #475569;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    padding: 1rem;
   }
-  to {
-    transform: rotate(360deg);
+
+  .task-form {
+    flex-direction: column;
+  }
+
+  .task-list li {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
