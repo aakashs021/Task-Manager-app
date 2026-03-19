@@ -19,31 +19,14 @@ import {
 import './App.css';
 import { auth, db } from './firebase';
 
-function getAuthMessage(error) {
-  if (!error || !error.code) {
-    return 'Something went wrong. Please try again.';
-  }
-
-  switch (error.code) {
-    case 'auth/invalid-email':
-      return 'Please enter a valid email address.';
-    case 'auth/user-not-found':
-    case 'auth/wrong-password':
-    case 'auth/invalid-credential':
-      return 'Invalid email or password.';
-    case 'auth/email-already-in-use':
-      return 'This email is already registered. Please login instead.';
-    case 'auth/weak-password':
-      return 'Password is too weak. Use at least 6 characters.';
-    default:
-      return error.message || 'Authentication failed. Please try again.';
-  }
-}
-
 function App() {
   const [currentPage, setCurrentPage] = useState('home');
   const [tasks, setTasks] = useState([]);
   const [taskInput, setTaskInput] = useState('');
+
+  const [editTaskId, setEditTaskId] = useState(null);
+  const [editText, setEditText] = useState('');
+
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [signupForm, setSignupForm] = useState({
     name: '',
@@ -51,235 +34,160 @@ function App() {
     password: '',
     confirmPassword: '',
   });
+
   const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
   const [loginError, setLoginError] = useState('');
   const [signupError, setSignupError] = useState('');
-  const [tasksLoading, setTasksLoading] = useState(false);
-  const [taskError, setTaskError] = useState('');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
-      setAuthLoading(false);
     });
-
     return unsubscribe;
   }, []);
 
   useEffect(() => {
     if (!user) {
       setTasks([]);
-      setTasksLoading(false);
-      setTaskError('');
       return;
     }
 
-    setTasksLoading(true);
-    setTaskError('');
-
-    const tasksQuery = query(
+    const q = query(
       collection(db, 'users', user.uid, 'tasks'),
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(
-      tasksQuery,
-      (snapshot) => {
-        setTasks(
-          snapshot.docs.map((taskDoc) => ({
-            id: taskDoc.id,
-            ...taskDoc.data(),
-          }))
-        );
-        setTasksLoading(false);
-      },
-      () => {
-        setTaskError('Could not load tasks from Firestore.');
-        setTasksLoading(false);
-      }
-    );
-
-    return unsubscribe;
+    return onSnapshot(q, (snapshot) => {
+      setTasks(snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })));
+    });
   }, [user]);
 
   const completedCount = useMemo(
-    () => tasks.filter((task) => task.completed).length,
+    () => tasks.filter((t) => t.completed).length,
     [tasks]
   );
 
-  const handleAddTask = async (event) => {
-    event.preventDefault();
-    setTaskError('');
+  const handleAddTask = async (e) => {
+    e.preventDefault();
+    if (!taskInput.trim()) return;
 
-    if (!taskInput.trim() || !user) {
-      return;
-    }
+    await addDoc(collection(db, 'users', user.uid, 'tasks'), {
+      text: taskInput,
+      completed: false,
+      createdAt: Date.now(),
+    });
 
-    try {
-      await addDoc(collection(db, 'users', user.uid, 'tasks'), {
-        text: taskInput.trim(),
-        completed: false,
-        createdAt: Date.now(),
-      });
-      setTaskInput('');
-    } catch (error) {
-      setTaskError(error.message || 'Could not save task to Firestore.');
-    }
+    setTaskInput('');
   };
 
-  const handleToggleTask = async (taskId, currentValue) => {
-    if (!user) {
-      return;
-    }
-
-    setTaskError('');
-
-    try {
-      await updateDoc(doc(db, 'users', user.uid, 'tasks', taskId), {
-        completed: !currentValue,
-      });
-    } catch (error) {
-      setTaskError(error.message || 'Could not update task.');
-    }
+  const handleToggleTask = async (id, value) => {
+    await updateDoc(doc(db, 'users', user.uid, 'tasks', id), {
+      completed: !value,
+    });
   };
 
-  const handleDeleteTask = async (taskId) => {
-    if (!user) {
-      return;
-    }
-
-    setTaskError('');
-
-    try {
-      await deleteDoc(doc(db, 'users', user.uid, 'tasks', taskId));
-    } catch (error) {
-      setTaskError(error.message || 'Could not delete task.');
-    }
+  const handleDeleteTask = async (id) => {
+    await deleteDoc(doc(db, 'users', user.uid, 'tasks', id));
   };
 
-  const handleInputChange = (setter) => (event) => {
-    const { name, value } = event.target;
+  const handleEditTask = async (id) => {
+    await updateDoc(doc(db, 'users', user.uid, 'tasks', id), {
+      text: editText,
+    });
+    setEditTaskId(null);
+  };
+
+  const handleInputChange = (setter) => (e) => {
+    const { name, value } = e.target;
     setter((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleLoginSubmit = async (event) => {
-    event.preventDefault();
-    setLoginError('');
-
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
     try {
       await signInWithEmailAndPassword(auth, loginForm.email, loginForm.password);
-      setLoginForm({ email: '', password: '' });
       setCurrentPage('home');
-    } catch (error) {
-      setLoginError(getAuthMessage(error));
+    } catch {
+      setLoginError('Invalid email or password');
     }
   };
 
-  const handleSignupSubmit = async (event) => {
-    event.preventDefault();
-    setSignupError('');
+  const handleSignupSubmit = async (e) => {
+    e.preventDefault();
 
     if (signupForm.password !== signupForm.confirmPassword) {
-      setSignupError('Passwords do not match.');
+      setSignupError('Passwords do not match');
       return;
     }
 
     try {
-      const credentials = await createUserWithEmailAndPassword(
+      const userCred = await createUserWithEmailAndPassword(
         auth,
         signupForm.email,
         signupForm.password
       );
 
-      if (signupForm.name.trim()) {
-        await updateProfile(credentials.user, {
-          displayName: signupForm.name.trim(),
+      if (signupForm.name) {
+        await updateProfile(userCred.user, {
+          displayName: signupForm.name,
         });
       }
 
-      setSignupForm({
-        name: '',
-        email: '',
-        password: '',
-        confirmPassword: '',
-      });
       setCurrentPage('home');
-    } catch (error) {
-      setSignupError(getAuthMessage(error));
+    } catch {
+      setSignupError('Signup failed');
     }
   };
 
   const handleLogout = async () => {
     await signOut(auth);
-    setCurrentPage('login');
   };
 
   return (
     <div className="app-shell">
+
+      {/* NAVBAR */}
       <header className="topbar">
         <h1>Task Manager</h1>
         <nav>
-          <button
-            type="button"
-            className={currentPage === 'home' ? 'active' : ''}
-            onClick={() => setCurrentPage('home')}
-          >
-            Homepage
-          </button>
-          <button
-            type="button"
-            className={currentPage === 'login' ? 'active' : ''}
-            onClick={() => setCurrentPage('login')}
-          >
-            Login
-          </button>
-          <button
-            type="button"
-            className={currentPage === 'signup' ? 'active' : ''}
-            onClick={() => setCurrentPage('signup')}
-          >
-            Signup
-          </button>
+          <button onClick={() => setCurrentPage('home')}>Home</button>
+          <button onClick={() => setCurrentPage('login')}>Login</button>
+          <button onClick={() => setCurrentPage('signup')}>Signup</button>
         </nav>
       </header>
 
       <main className="content">
+
+        {/* HOME */}
         {currentPage === 'home' && (
           <section className="card">
-            <h2>Homepage</h2>
-            <p>Track your daily tasks and keep progress clear.</p>
 
-            {authLoading && <p className="info-text">Checking authentication...</p>}
-
-            {!authLoading && !user && (
+            {!user ? (
               <div className="auth-required">
-                <p>Please login or signup to manage your tasks.</p>
-                <button type="button" onClick={() => setCurrentPage('login')}>
+                <p>Please login to continue</p>
+                <button onClick={() => setCurrentPage('login')}>
                   Go to Login
                 </button>
               </div>
-            )}
-
-            {!authLoading && user && (
+            ) : (
               <>
                 <div className="user-row">
-                  <span>
-                    Signed in as {user.displayName || user.email}
-                  </span>
-                  <button type="button" className="secondary-btn" onClick={handleLogout}>
+                  <span>Welcome {user.email}</span>
+                  <button className="logout-btn" onClick={handleLogout}>
                     Logout
                   </button>
                 </div>
 
                 <form onSubmit={handleAddTask} className="task-form">
                   <input
-                    type="text"
-                    placeholder="Enter a new task"
                     value={taskInput}
-                    onChange={(event) => setTaskInput(event.target.value)}
+                    onChange={(e) => setTaskInput(e.target.value)}
+                    placeholder="Add new task"
                   />
-                  <button type="submit">Add Task</button>
+                  <button>Add</button>
                 </form>
 
                 <div className="task-summary">
@@ -287,30 +195,51 @@ function App() {
                   <span>Completed: {completedCount}</span>
                 </div>
 
-                {tasksLoading && <p className="info-text">Loading tasks...</p>}
-                {taskError && <p className="error-text">{taskError}</p>}
-                {!tasksLoading && tasks.length === 0 && (
-                  <p className="info-text">No tasks yet. Add your first task.</p>
-                )}
-
                 <ul className="task-list">
                   {tasks.map((task) => (
-                    <li key={task.id} className={task.completed ? 'done' : ''}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={task.completed}
-                          onChange={() => handleToggleTask(task.id, task.completed)}
-                        />
-                        {task.text}
-                      </label>
-                      <button
-                        type="button"
-                        className="delete-btn"
-                        onClick={() => handleDeleteTask(task.id)}
-                      >
-                        Delete
-                      </button>
+                    <li key={task.id}>
+
+                      <input
+                        type="checkbox"
+                        checked={task.completed}
+                        onChange={() =>
+                          handleToggleTask(task.id, task.completed)
+                        }
+                      />
+
+                      {editTaskId === task.id ? (
+                        <>
+                          <input
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                          />
+                          <button className="save-btn" onClick={() => handleEditTask(task.id)}>Save</button>
+                          <button className="cancel-btn" onClick={() => setEditTaskId(null)}>Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className={task.completed ? "completed" : ""}>
+                            {task.text}
+                          </span>
+
+                          <button
+                            className="edit-btn"
+                            onClick={() => {
+                              setEditTaskId(task.id);
+                              setEditText(task.text);
+                            }}
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            className="delete-btn"
+                            onClick={() => handleDeleteTask(task.id)}
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -319,85 +248,90 @@ function App() {
           </section>
         )}
 
+        {/* LOGIN */}
         {currentPage === 'login' && (
           <section className="card">
-            <h2>Login Page</h2>
+            <h2>Login</h2>
+
             <form onSubmit={handleLoginSubmit} className="auth-form">
               <label>
                 Email
                 <input
                   type="email"
                   name="email"
-                  required
                   value={loginForm.email}
                   onChange={handleInputChange(setLoginForm)}
                 />
               </label>
+
               <label>
                 Password
                 <input
                   type="password"
                   name="password"
-                  required
                   value={loginForm.password}
                   onChange={handleInputChange(setLoginForm)}
                 />
               </label>
+
               {loginError && <p className="error-text">{loginError}</p>}
+
               <button type="submit">Login</button>
             </form>
           </section>
         )}
 
+        {/* SIGNUP */}
         {currentPage === 'signup' && (
           <section className="card">
-            <h2>Signup Page</h2>
+            <h2>Signup</h2>
+
             <form onSubmit={handleSignupSubmit} className="auth-form">
               <label>
                 Full Name
                 <input
-                  type="text"
                   name="name"
-                  required
                   value={signupForm.name}
                   onChange={handleInputChange(setSignupForm)}
                 />
               </label>
+
               <label>
                 Email
                 <input
-                  type="email"
                   name="email"
-                  required
                   value={signupForm.email}
                   onChange={handleInputChange(setSignupForm)}
                 />
               </label>
+
               <label>
                 Password
                 <input
                   type="password"
                   name="password"
-                  required
                   value={signupForm.password}
                   onChange={handleInputChange(setSignupForm)}
                 />
               </label>
+
               <label>
                 Confirm Password
                 <input
                   type="password"
                   name="confirmPassword"
-                  required
                   value={signupForm.confirmPassword}
                   onChange={handleInputChange(setSignupForm)}
                 />
               </label>
+
               {signupError && <p className="error-text">{signupError}</p>}
+
               <button type="submit">Create Account</button>
             </form>
           </section>
         )}
+
       </main>
     </div>
   );
