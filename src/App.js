@@ -39,6 +39,11 @@ function App() {
   const [loginError, setLoginError] = useState('');
   const [signupError, setSignupError] = useState('');
 
+  // NEW STATES
+  const [taskError, setTaskError] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
@@ -70,9 +75,16 @@ function App() {
     [tasks]
   );
 
+  // ADD TASK WITH ERROR HANDLING
   const handleAddTask = async (e) => {
     e.preventDefault();
-    if (!taskInput.trim()) return;
+
+    if (!taskInput.trim()) {
+      setTaskError("Task cannot be empty");
+      return;
+    }
+
+    setTaskError('');
 
     await addDoc(collection(db, 'users', user.uid, 'tasks'), {
       text: taskInput,
@@ -94,10 +106,14 @@ function App() {
   };
 
   const handleEditTask = async (id) => {
+    if (!editText.trim()) return;
+
     await updateDoc(doc(db, 'users', user.uid, 'tasks', id), {
       text: editText,
     });
+
     setEditTaskId(null);
+    setEditText('');
   };
 
   const handleInputChange = (setter) => (e) => {
@@ -144,12 +160,26 @@ function App() {
 
   const handleLogout = async () => {
     await signOut(auth);
+    setCurrentPage('login');
   };
+
+  // FILTER + SEARCH
+  const filteredTasks = tasks.filter(task => {
+    let matchesFilter =
+      filter === 'all' ||
+      (filter === 'completed' && task.completed) ||
+      (filter === 'pending' && !task.completed);
+
+    let matchesSearch = task.text
+      .toLowerCase()
+      .includes(search.toLowerCase());
+
+    return matchesFilter && matchesSearch;
+  });
 
   return (
     <div className="app-shell">
 
-      {/* NAVBAR */}
       <header className="topbar">
         <h1>Task Manager</h1>
         <nav>
@@ -190,15 +220,32 @@ function App() {
                   <button>Add</button>
                 </form>
 
+                {taskError && <p className="error-text">{taskError}</p>}
+
+                <h2>Your Tasks</h2>
+
+                {/* SEARCH */}
+                <input
+                  placeholder="Search tasks..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+
+                {/* FILTER */}
+                <div>
+                  <button onClick={() => setFilter('all')}>All</button>
+                  <button onClick={() => setFilter('completed')}>Completed</button>
+                  <button onClick={() => setFilter('pending')}>Pending</button>
+                </div>
+
                 <div className="task-summary">
                   <span>Total: {tasks.length}</span>
                   <span>Completed: {completedCount}</span>
                 </div>
 
                 <ul className="task-list">
-                  {tasks.map((task) => (
+                  {filteredTasks.map((task) => (
                     <li key={task.id}>
-
                       <input
                         type="checkbox"
                         checked={task.completed}
@@ -243,6 +290,11 @@ function App() {
                     </li>
                   ))}
                 </ul>
+
+                {filteredTasks.length === 0 && (
+                  <p className="info-text">No tasks found</p>
+                )}
+
               </>
             )}
           </section>
